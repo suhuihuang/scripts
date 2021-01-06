@@ -1,6 +1,6 @@
 # scripts
-# event GKG mentions
+- event GKG mentions
 http://data.gdeltproject.org/gdeltv2/masterfilelist.txt
 
-# event
+- event
 http://data.gdeltproject.org/events/index.html 
