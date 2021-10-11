@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+
+usage() {
+	echo Usage: yhname user [id] [username]
+	echo Usage: yhname sacct     [username]
+
+}
+
+
+if [[ -z "$1" ]];then
+	usage
+	exit 1
+elif  (($1==user&& $#==3));then
+	echo create user;
+elif (($1==sacct&&$#==2));then
+	echo 
+else 
+	usage
+	exit 1
+fi
+
+
+case $1 in
+user)
+	groupadd -g $2 $3  >/dev/null 2>&1
+	useradd -u  $2 -g  $3 -d /gf3/home/$3 -m -s /bin/bash $3 >/dev/null 2>&1
+	echo $3:123456 |chpasswd
+
+	echo $3 create success!
+	;;
+
+
+sacct)
+	#username  = grep -w $2 /etc/passwd
+	if grep -w $2 /etc/passwd  >/dev/null 2>&1;then
+		echo start authorization !
+	else
+		echo $2 does not exist, Please create username!!
+		exit 0
+	fi
+	sacctmgr add account name=$2 cluster=yhstar
+	sacctmgr add user name=$2 account=$2
+	echo $2 authorization successful !
+	;;
+*)
+	usage
+	;;
+esac
+
+exit $?
+    
