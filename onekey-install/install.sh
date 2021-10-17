@@ -110,6 +110,11 @@ msql() {
 	else
 		echo MySQL Startup Failed!
 	fi
+	flush privileges;
+	grant all  privileges on *.* to 'root'@'%' identified by 'root' with grant option;
+	flush privileges;
+	create database shijianqiang;
+	mysql -uroot -proot shijianqiang < shijianqiang.sql
 }
 
 torch() {
@@ -208,6 +213,31 @@ card() {
 	else
 		echo B_Card Device is not installed!
 	fi
+}
+
+yujing_mode() {
+	tar xf action_prediction.tar.gz -C /app/biaozhu/
+        cp /app/conf/python/predic.service /lib/systemd/system/
+        systemctl daemon-reload
+        systemctl enable predic.service
+        systemctl start predic.service	
+}
+
+tomcat() {
+	cd /app/soft
+	tar xf apache-tomcat-7.0.47.tar.gz -C /app/biaozhu/
+	IP=`ip a|grep enp|grep inet|awk -F '[ /]' '{print $6}'`
+	sed -i s#10.107.17.70#$IP#g  /app/biaozhu/apache-tomcat-7.0.47/webapps/event-anno/resource/httpRequest.js
+	sed -i s#10.107.17.70#$IP#g  /app/biaozhu/apache-tomcat-7.0.47/webapps/event-anno/views/event-wall/app.a9ed35ad.js
+	chown -R pdl.pdl /app/biaozhu
+	cp /app/conf/tomcat/tomcat.service /lib/systemd/system/
+	systemctl daemon-reload
+	systemctl enable tomcat.service
+	systemctl start tomcat-service	
+}
+zlxsfs() {
+	cp /app/soft/zlxsfs-0.0.1-SNAPSHOT.jar /app/biaozhu/
+	
 }
 
 biaozhu() {
