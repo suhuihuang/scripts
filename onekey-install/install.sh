@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# create 2021/08/23 by suhuihuang
 
 username=kylin
 
@@ -70,8 +71,8 @@ aconda() {
 		sed -i  '2c set _CONDA_ROOT "/app/public/archiconda3"' /app/public/archiconda3/etc/fish/conf.d/conda.fish
 		echo Anaconda install success!
 	fi
-	echo activation python 3.6, please run \"source /app/scripts/activate_py36.sh\".
-	echo activation python 3.7, please run \"source /app/scripts/activate_py37.sh\"
+	#echo activation python 3.6, please run \"source /app/scripts/activate_py36.sh\".
+	#echo activation python 3.7, please run \"source /app/scripts/activate_py37.sh\"
 }
 	
 ngx() {
@@ -81,10 +82,16 @@ ngx() {
 		cd /app/soft
 		tar xf nginx1.18_linux_arm.tar.gz -C /app/public
 		ln -sf /app/public/nginx1.18/sbin/nginx /usr/local/sbin/nginx
+		cp /app/conf/nginx/nginx.conf /app/public/nginx1.18/conf/nginx.conf
 		cp /app/conf/nginx/nginx.service /lib/systemd/system/nginx.service
 		systemctl daemon-reload 
 		systemctl enable nginx.service
 		systemctl restart nginx.service
+	fi
+
+	http_code=`curl -I 127.0.0.1 | awk 'NR==1{print $2}'` >/dev/null 2>&1
+	if  [ $http_code == 200 ];then
+		echo  nginx access successful!
 	fi
 }
 
@@ -103,18 +110,29 @@ jdk() {
 msql() {
 	#apt-get update >/dev/null 2>&1
 	apt-get install mysql-server -y >/dev/null 2>&1
+	if ! grep -w skip-grant-tables /etc/mysql/mysql.conf.d/mysqld.cnf;then
+		sed -i '39a skip-grant-tables' /etc/mysql/mysql.conf.d/mysqld.cnf
+		sed -i "s%bind-address%#bind-address%g" /etc/mysql/mysql.conf.d/mysqld.cnf
+	fi
+
 	systemctl enable mysql  >/dev/null 2>&1
 	systemctl restart mysql 
+
 	if netstat -lntup | grep mysql;then
 		echo MySQL Startup Success!
+		mysql -e "use mysql;update user set authentication_string='root' where user='root' and host='localhost';"
+		mysql -e "flush privileges;"
+		systemctl restart mysql
 	else
 		echo MySQL Startup Failed!
 	fi
-	flush privileges;
-	grant all  privileges on *.* to 'root'@'%' identified by 'root' with grant option;
-	flush privileges;
-	create database shijianqiang;
-	mysql -uroot -proot shijianqiang < shijianqiang.sql
+
+	if mysql -uroot -proot -h127.0.0.1 -e "show databases;";then
+		echo MySQL user authorization succeeded!
+	else
+		echo MySQL user authorization failed!
+		echo Please check then reason!
+	fi
 }
 
 torch() {
@@ -149,9 +167,9 @@ es() {
 		cd /app/soft/
 		tar xf elasticsearch-5.6.1.tar.gz -C /app/biaozhu/
 		chown -R $username.$username /app
-		sed -i "s%User=pdl%User=$username%g" /app/conf/elasticsearch/elasticsearch.service
-		sed -i "s%Group=pdl%Group=$username%g" /app/conf/elasticsearch/elasticsearch.service
 		cp /app/conf/elasticsearch/elasticsearch.service /lib/systemd/system/
+		sed -i "s%User=pdl%User=$username%g" /lib/systemd/system/elasticsearch.service
+		sed -i "s%Group=pdl%Group=$username%g" /lib/systemd/system/elasticsearch.service
 		if ! sysctl -p | grep -w "vm.max_map_count = 262144";then
 			echo "vm.max_map_count = 262144" >>/etc/sysctl.conf;
 			#echo "*  soft  nofile  65536" >>/etc/security/limits.conf
@@ -214,42 +232,80 @@ card() {
 		echo B_Card Device is not installed!
 	fi
 }
-
-yujing_mode() {
-	tar xf action_prediction.tar.gz -C /app/biaozhu/
-        cp /app/conf/python/predic.service /lib/systemd/system/
-        systemctl daemon-reload
-        systemctl enable predic.service
-        systemctl start predic.service	
+yujing_module() {
+	aconda
+	if [ ! -d  /app/biaozhu/action_prediction ];then
+		cd $soft
+		tar xf action_prediction.tar.gz -C /app/biaozhu/
+		chown -R $username.$username /app
+		cp /app/conf/python/predic.service /lib/systemd/system/
+		sed -i "s%User=pdl%User=$username%g" /lib/systemd/system/predic.service
+		sed -i "s%Group=pdl%Group=$username%g" /lib/systemd/system/predic.service
+		systemctl daemon-reload
+		systemctl enable predic.service
+		systemctl start predic.service
+	else
+		echo yujing_module already installed!
+	fi
+	if systemctl status predic|grep Active|awk '{print $2}' >/dev/null 2>&1;then
+		echo yujing_module Startup Success!
+	else
+		echo yujing_module Startup Failed!
+	fi		
+}
+web() {
+	mkdir -p /app/biaozhu/web
+	if netstat -lntup| grep nginx| grep 8090 ;then
+		cd $soft
+		unzip -nq -d /app/biaozhu/web/ event-anno.zip
+		IP=`ip a|grep enp|grep inet|awk -F '[ /]' '{print $6}'`
+		sed -i s#10.107.17.70#$IP#g  /app/biaozhu/web/event-anno/resource/httpRequest.js
+		sed -i s#10.107.17.70#$IP#g  /app/biaozhu/web/event-anno/views/event-wall/js/app.a9ed35ad.js
+		chown -R $username.$username /app/biaozhu
+		systemctl restart nginx
+	else
+		echo listen port  8090  is not open!
+	fi
 }
 
-tomcat() {
-	cd /app/soft
-	tar xf apache-tomcat-7.0.47.tar.gz -C /app/biaozhu/
-	IP=`ip a|grep enp|grep inet|awk -F '[ /]' '{print $6}'`
-	sed -i s#10.107.17.70#$IP#g  /app/biaozhu/apache-tomcat-7.0.47/webapps/event-anno/resource/httpRequest.js
-	sed -i s#10.107.17.70#$IP#g  /app/biaozhu/apache-tomcat-7.0.47/webapps/event-anno/views/event-wall/app.a9ed35ad.js
-	chown -R pdl.pdl /app/biaozhu
-	cp /app/conf/tomcat/tomcat.service /lib/systemd/system/
+event() {
+	cd $soft
+	cp zlxsfs-0.0.1-SNAPSHOT.jar /app/biaozhu/
+	tar xf annotation.tar.gz -C /app/biaozhu/
+	cp /app/conf/event/event_start.sh /app/biaozhu/
+	cp /app/conf/event/event.service /lib/systemd/system/
+	sed -i "s%User=pdl%User=$username%g" /lib/systemd/system/event.service
+	sed -i "s%Group=pdl%Group=$username%g" /lib/systemd/system/event.service
 	systemctl daemon-reload
-	systemctl enable tomcat.service
-	systemctl start tomcat-service	
-}
-zlxsfs() {
-	cp /app/soft/zlxsfs-0.0.1-SNAPSHOT.jar /app/biaozhu/
-	
+	systemctl enable event.service
+	systemctl restart event.service
+	echo event!
 }
 
 biaozhu() {
+	echo ------------------------------------------------------------------------
 	es
+	echo ------------------------------------------------------------------------
 	msql
+	mysql -uroot -proot -h127.0.0.1 -e "create database shijianqiang;"
+	mysql -uroot -proot shijianqiang < /app/conf/mysql/shijianqiang.sql
+	echo ------------------------------------------------------------------------
+	yujing_module
+	echo ------------------------------------------------------------------------
+	web
+	echo ------------------------------------------------------------------------
+	event
 }
 
-
+hadoop() {
+	hadoop
+}
 
 case $1 in
 anaconda)
 	aconda
+	echo activation python 3.6, please run \"source /app/scripts/activate_py36.sh\".
+	echo activation python 3.7, please run \"source /app/scripts/activate_py37.sh\"	
 	;;
 nginx)
 	ngx
@@ -280,6 +336,9 @@ caffe)
 	;;
 biaozhu)
 	biaozhu
+	;;
+hadoop)
+	hadoop
 	;;
 *)
 	usage
