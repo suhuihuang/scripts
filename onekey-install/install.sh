@@ -2,13 +2,15 @@
 
 # create 2021/08/23 by suhuihuang
 
-username=kylin
+name=kylin
 
 public=/app/public
 biaozhu=/app/biaozhu
 soft=/app/soft
 conf=/app/conf
 biaozhu=/app/biaozhu
+HOME=/app/hadoop
+HADOOP_HOME=/app/hadoop/hadoop_2.7.7
 
 
 if [ ! -d "$public" ];then
@@ -21,13 +23,13 @@ fi
 
 
 # 判断 kyin 是否存在
-if id $username >/dev/null 2>&1;then
-	#echo $username  exits!
-	chown -R $username.$username /app
-else
-	username
-	exit 0;
-fi
+#if id $name >/dev/null 2>&1;then
+#	#echo $username  exits!
+#	chown -R $name.$name /app
+#else
+#	username
+#	exit 0;
+#fi
 
 
 
@@ -42,18 +44,18 @@ fi
 
 
 usage() {
-	echo "Usage: install  [anaconda|nginx|jdk|mysql|pytorch|tensorflow|elasticsearch|neo4j|biaozhu]"
+	echo "Usage: install  [anaconda|nginx|jdk|pytorch|tensorflow|hadoop|elasticsearch|bcard|neo4j]"
 }
 
 # type java    判断软件是否安装
 
-username() {
-	echo create username $username ....
-	adduser $username;
-	echo $username:123456 |chpasswd;
-	echo $username user  create success!
-	chown -R $username.$username /app
-}
+#username() {
+#	echo create username $name ....
+#	adduser $name;
+#	echo $name:123456 |chpasswd;
+#	echo $name user  create success!
+#	chown -R $name.$name /app
+#}
 
 aconda() {
 	source /app/public/archiconda3/etc/profile.d/conda.sh >/dev/null 2>&1
@@ -89,6 +91,9 @@ ngx() {
 		systemctl restart nginx.service
 	fi
 
+	systemctl daemon-reload
+        systemctl enable nginx.service
+        systemctl restart nginx.service
 	http_code=`curl -I 127.0.0.1 | awk 'NR==1{print $2}'` >/dev/null 2>&1
 	if  [ $http_code == 200 ];then
 		echo  nginx access successful!
@@ -96,11 +101,14 @@ ngx() {
 }
 
 jdk() {
+	if [ ! -d /app/public/jdk1.8.0_271 ];then
+		cd /app/soft
+		tar xf jdk-8u271-linux-aarch64.tar.gz -C /app/public/
+	fi
+
 	if type java >/dev/null 2>&1;then
 		echo JDK already installed!
 	else
-		cd /app/soft
-		tar xf jdk-8u271-linux-aarch64.tar.gz -C /app/public/
 		sed -i.ori '$a export JAVA_HOME=/app/public/jdk1.8.0_271\nexport PATH=$JAVA_HOME/bin:$JAVA_HOME/jre/bin:$PATH\nexport CLASSPATH=.$CLASSPATH:$JAVA_HOME/lib:$JAVA_HOME/jre/lib:$JAVA_HOME/jre/lib:$JAVA_HOME/lib/tools.jar' /etc/profile
 		echo JDK install ok! 
 		echo Please run  \"source /etc/profile\"
@@ -168,8 +176,8 @@ es() {
 		tar xf elasticsearch-5.6.1.tar.gz -C /app/biaozhu/
 		chown -R $username.$username /app
 		cp /app/conf/elasticsearch/elasticsearch.service /lib/systemd/system/
-		sed -i "s%User=pdl%User=$username%g" /lib/systemd/system/elasticsearch.service
-		sed -i "s%Group=pdl%Group=$username%g" /lib/systemd/system/elasticsearch.service
+		#sed -i "s%User=pdl%User=$username%g" /lib/systemd/system/elasticsearch.service
+		#sed -i "s%Group=pdl%Group=$username%g" /lib/systemd/system/elasticsearch.service
 		if ! sysctl -p | grep -w "vm.max_map_count = 262144";then
 			echo "vm.max_map_count = 262144" >>/etc/sysctl.conf;
 			#echo "*  soft  nofile  65536" >>/etc/security/limits.conf
@@ -194,16 +202,16 @@ neo4j() {
 	if [ ! -d "$neo4j_dir" ];then
 		cd $soft
 		tar xf neo4j-community-3.4.17-unix.tar.gz -C $public
-		/app/public/neo4j-community-3.4.17/bin/neo4j start
+		$public/neo4j-community-3.4.17/bin/neo4j start
+		if ps -ef | grep neo4j | grep -v grep |grep -v install;then
+			echo Neo4j Startup Success!
+		else
+			echo Neo4j Startup Failed!
+		fi
 	else
 		echo neo4j already installed!
 	fi
 
-	if netstat -lntup| grep 7474;then
-		echo Neo4j Startup Success!
-	else
-		echo Neo4j Startup Failed!
-	fi
 }
 
 cafe() {
@@ -217,20 +225,27 @@ cafe() {
 }
 
 card() {
-	if  lspci | grep BM1684 ;then
-		if [ ! -d /dev/bm-sophon0 ];then
+	if  lspci | grep 1684 ;then
+		if [ ! -c /dev/bm-sophon0 ];then
 			cd $soft
-			tar xf bmnnsdk2-bm1684_v2.0.3.tar.gz -C /app/public/
-			cd  bmnnsdk2-bm1684_v2.0.3/scripts/
-			./install_lib.sh
-			source  envsetup_pcie.sh ufw
-			source envsetup_pcie.sh bmnetu
+			tar xf bmnnsdk2-bm1684_v2.0.3.tar.gz -C $public
+
+			cd  $public/bmnnsdk2-bm1684_v2.0.3/scripts/
+			./install_driver_arm_pcie.sh
+			#./install_lib.sh
+			#source  envsetup_pcie.sh ufw
+			#source envsetup_pcie.sh bmnetu
+			echo "source $public/bmnnsdk2-bm1684_v2.0.3/scripts/envsetup_arm_pcie.sh" >/etc/profile.d/bcard.sh
+			source /etc/profile.d/bcard.sh
 		else
 			echo B_Card driver installed!
+			echo "source /home/kylin/bmnnsdk2-bm1684_v2.0.3/scripts/envsetup_arm_pcie.sh" > /etc/profile.d/bcard.sh
+			source /etc/profile.d/bcard.sh
 		fi
 	else
 		echo B_Card Device is not installed!
 	fi
+	source /etc/profile.d/bcard.sh
 }
 yujing_module() {
 	aconda
@@ -283,23 +298,76 @@ event() {
 }
 
 biaozhu() {
-	echo ------------------------------------------------------------------------
+	echo -----------------------------------------------------------------------
 	es
-	echo ------------------------------------------------------------------------
+	echo -----------------------------------------------------------------------
 	msql
 	mysql -uroot -proot -h127.0.0.1 -e "create database shijianqiang;"
 	mysql -uroot -proot shijianqiang < /app/conf/mysql/shijianqiang.sql
-	echo ------------------------------------------------------------------------
+	echo -----------------------------------------------------------------------
 	yujing_module
-	echo ------------------------------------------------------------------------
+	echo -----------------------------------------------------------------------
 	web
-	echo ------------------------------------------------------------------------
+	echo -----------------------------------------------------------------------
 	event
 }
 
 hadoop() {
-	hadoop
+	HOME=/app/hadoop
+	HADOOP_HOME=/app/hadoop/hadoop_2.7.7
+	cd $soft/hadoop/
+	tar xf hadoop_2.7.7.tar.gz -C $HOME
+	cd $HADOOP_HOME/etc/hadoop/
+	grep -r cn5 | awk -F ":" '{print $1}'|xargs sed -i s#cn5#$HOSTNAME#g
+	chown -R $user.$user /app
+	if [ ! -d $HADOOP_HOME/hadoopDatas ];then
+		$HADOOP_HOME/bin/hdfs  namenode -format >/dev/null 2>&1
+		if [[ $? != 0 ]];then
+			echo hadoop -format faild !
+		fi
+	fi
+	$HADOOP_HOME/sbin/start-all.sh
+	if  jps|grep NameNode;then
+		echo Hadoop Startup Succes!
+	else
+		echo Hadoop Startup Failed!
+	fi
 }
+
+scala() {
+	cd $soft/hadoop/
+	if [ ! -d /app/hadoop/scala-2.11.8 ];then
+		unzip scala-2.11.8.zip -d /app/hadoop/ >/dev/null 2>&1 
+		ln -sf /app/hadoop/scala-2.11.8/bin/* /usr/local/bin/
+		if /usr/local/bin/scala -version;then
+			echo scala  install success!
+		else
+			echo Scala install failed!
+			exit 1
+		fi
+	else
+		echo scala  already installed!
+	fi
+}
+spark() {
+	cd $soft/hadoop/
+	if [ ! -d /app/hadoop/spark-2.4.3 ];then
+		tar xf spark-2.4.3.tar.gz -C /app/hadoop/
+		cd /app/hadoop/spark-2.4.3/conf
+		grep -r cn5 | awk -F ":" '{print $1}'|xargs sed -i s#cn5#$HOSTNAME#
+	fi
+	if  jps|grep NameNode >/dev/null 2>&1;then
+		/app/hadoop/hadoop_2.7.7/bin/hdfs dfs -mkdir -p /spark_log
+		/app/hadoop/spark-2.4.3/sbin/start-all.sh
+		/app/hadoop/spark-2.4.3/sbin/start-history-server.sh
+	else
+		echo startup failed!
+	fi
+	
+	
+	
+}
+
 
 case $1 in
 anaconda)
@@ -317,9 +385,11 @@ mysql)
 	msql
 	;;
 pytorch)
+	aconda
 	torch
 	;;
 tensorflow)
+	aconda
 	tenflow
 	;;
 elasticsearch)
@@ -338,8 +408,22 @@ biaozhu)
 	biaozhu
 	;;
 hadoop)
+	if [ ! -d $HOME ];then
+		mkdir -p $HOME;
+	fi
+	jdk
+	scala
 	hadoop
 	;;
+spark)
+	$HADOOP_HOME/sbin/start-all.sh
+	if  jps|grep NameNode >/dev/null 2>&1;then
+		spark
+	else
+		echo Please startup hadoop
+	fi
+	;;
+
 *)
 	usage
 	;;
