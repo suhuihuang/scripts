@@ -3,7 +3,8 @@
 
 usage() {
 	echo Usage: yhname user [id] [username]
-	echo Usage: yhname sacct     [username]
+	echo Usage: yhname deluser [username]
+	echo Usage: yhname sacct [username]
 
 }
 
@@ -11,6 +12,8 @@ usage() {
 if [[ -z "$1" ]];then
 	usage
 	exit 1
+elif  (($1==delu && $#==1));then
+	echo 
 elif  (($1==user&& $#==3));then
 	echo create user;
 elif (($1==sacct&&$#==2));then
@@ -23,12 +26,22 @@ fi
 
 case $1 in
 user)
-	groupadd -g $2 $3  >/dev/null 2>&1
-	useradd -u  $2 -g  $3 -d /gf3/home/$3 -m -s /bin/bash $3 >/dev/null 2>&1
-	echo $3:123456 |chpasswd
-
-	echo $3 create success!
+	node=`scontrol show hostname cn[0-10],cn12,cn[14-15],mn0`
+	for i in $node
+	do
+		echo ==================== $i ===========================
+		ssh $i "groupadd -g $2 $3;useradd -u $2 -g  $3 -d /gfdata/home/$3 -m -s /bin/bash $3 >/dev/null 2>&1;echo $3:123456 |chpasswd" 
+	done
 	;;
+
+deluser)
+	node=`scontrol show hostname cn[0-10],cn12,cn[14-15],mn0`
+	for i in $node
+        do
+                echo ==================== $i ===========================
+                ssh $i "userdel $2"
+        done
+        ;;
 
 
 sacct)
